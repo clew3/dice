@@ -120,6 +120,7 @@
 
       <div class="row" style="margin-top:10px;gap:8px;">
         <button class="btn" id="rollBtn" aria-label="Roll D20 (Space/Enter)">🎲 Roll</button>
+        <button class="btn warn" id="endTurnBtn" aria-label="End Turn (E)">⏭️ End Turn</button>
         <button class="btn secondary" id="undoBtn" disabled>Undo</button>
         <button class="btn ghost" id="resetBtn">Reset</button>
       </div>
@@ -161,7 +162,7 @@
       </div>
       <div class="grid-2" style="margin-top:8px;">
         <label class="row" style="align-items:center;gap:8px;">
-          <input type="checkbox" id="penaltyEndsTurn"/>
+          <input type="checkbox" id="penaltyEndsTurn" checked/>
           <span>Penalty (1 or 11) ends the turn immediately</span>
         </label>
         <label class="row" style="align-items:center;gap:8px;">
@@ -226,25 +227,14 @@
       osc.start(t); osc.stop(t+dur+0.01);
     },
     roll(){
-      // a quick cascade of blips to feel like a dice tumble
       for(let i=0;i<6;i++){
         const f = randInt(300,800);
         this.blip(i*0.05, f, 0.05, 'triangle', 0.07);
       }
     },
-    penaltyHard(){ // for roll==1
-      this.blip(0, 200, 0.12, 'square', 0.18);
-      this.blip(0.12, 150, 0.18, 'square', 0.18);
-    },
-    penaltySoft(){ // for roll==11
-      this.blip(0, 320, 0.10, 'sawtooth', 0.12);
-      this.blip(0.10, 260, 0.12, 'sawtooth', 0.10);
-    },
-    win(){
-      this.blip(0, 660, 0.12, 'sine', 0.16);
-      this.blip(0.12, 880, 0.14, 'sine', 0.16);
-      this.blip(0.26, 990, 0.18, 'sine', 0.14);
-    }
+    penaltyHard(){ this.blip(0, 200, 0.12, 'square', 0.18); this.blip(0.12, 150, 0.18, 'square', 0.18); },
+    penaltySoft(){ this.blip(0, 320, 0.10, 'sawtooth', 0.12); this.blip(0.10, 260, 0.12, 'sawtooth', 0.10); },
+    win(){ this.blip(0, 660, 0.12, 'sine', 0.16); this.blip(0.12, 880, 0.14, 'sine', 0.16); this.blip(0.26, 990, 0.18, 'sine', 0.14); }
   };
 
   // ---------------- State ----------------
@@ -252,7 +242,7 @@
     target: 200,
     rounding: 'nearest',
     rollsPerTurn: 5,
-    penaltyEndsTurn: false,
+    penaltyEndsTurn: true,   // DEFAULT: penalties end the turn automatically
     exactTarget: false,
     percentSet: [0,10,20,30,40,50,60,70,80,90,100],
     decreaseProb: 0.5, // chance that percent is a decrease
@@ -263,7 +253,7 @@
     currentPlayer: 0,
     turnNumber: 1,
     subRoll: 1,
-    history: [] // stack of {snapshot, logRow}
+    history: [] // stack of {snapshot}
   };
 
   // ---------------- Elements ----------------
@@ -273,7 +263,7 @@
   const targetEl = $('target'), targetEl2 = $('target2');
   const dieEl = $('die'), lastRollEl = $('lastRoll'), lastPctEl = $('lastPct');
   const turnNumEl = $('turnNum'), subRollEl = $('subRoll'), rollsPerTurnEl = $('rollsPerTurn'), turnInfo = $('turnInfo');
-  const rollBtn = $('rollBtn'), undoBtn = $('undoBtn'), resetBtn = $('resetBtn');
+  const rollBtn = $('rollBtn'), endTurnBtn = $('endTurnBtn'), undoBtn = $('undoBtn'), resetBtn = $('resetBtn');
   const logBody = $('logBody');
   const winBox = $('winBox'), failBox = $('failBox');
 
@@ -303,21 +293,30 @@
 
   function clearLogIfEmpty(){
     if (logBody.children.length===1 && logBody.children[0].children.length===1){
-      // initial placeholder row
       logBody.innerHTML = '';
     }
   }
 
   function appendLogRow(row){
+    // row: {turn, player, sub, roll, pct, pctSign, delta, total, note}
     clearLogIfEmpty();
     const tr = document.createElement('tr');
+
+    const pctCellHtml = (typeof row.pct === 'number')
+      ? `<td class="${row.pctSign==='-'?'bad':'good'}">${row.pctSign}${row.pct}%</td>`
+      : `<td>—</td>`;
+
+    const deltaCellHtml = (typeof row.delta === 'number')
+      ? `<td class="${row.delta>=0?'good':'bad'}">${row.delta>=0?'+':''}${fmt(row.delta)}</td>`
+      : `<td>—</td>`;
+
     tr.innerHTML = `
       <td>${row.turn}</td>
       <td>${row.player+1}</td>
-      <td>${row.sub}</td>
-      <td>${row.roll}</td>
-      <td class="${row.pctSign==='-'?'bad':'good'}">${row.pctSign}${row.pct}%</td>
-      <td class="${row.delta>=0?'good':'bad'}">${row.delta>=0?'+':''}${fmt(row.delta)}</td>
+      <td>${row.sub ?? '—'}</td>
+      <td>${(row.roll ?? '—')}</td>
+      ${pctCellHtml}
+      ${deltaCellHtml}
       <td>${fmt(row.total)}</td>
       <td>${row.note||''}</td>
     `;
@@ -331,8 +330,12 @@
   function setStatus(win){
     if (win){
       winBox.style.display='block'; failBox.style.display='none';
+      rollBtn.disabled = true;
+      endTurnBtn.disabled = true;
     } else {
       winBox.style.display='none'; failBox.style.display='block';
+      rollBtn.disabled = false;
+      endTurnBtn.disabled = false;
     }
   }
 
@@ -355,7 +358,7 @@
     resetLog();
   }
 
-  function saveSnapshot(noteRow=null){
+  function saveSnapshot(){
     const snapshot = JSON.parse(JSON.stringify({
       target: state.target,
       rounding: state.rounding,
@@ -369,49 +372,51 @@
       turnNumber: state.turnNumber,
       subRoll: state.subRoll
     }));
-    state.history.push({ snapshot, noteRow });
+    state.history.push({ snapshot });
     undoBtn.disabled = false;
   }
 
   function restoreSnapshot(){
     if (!state.history.length) return;
     const { snapshot } = state.history.pop();
-    const s = snapshot;
-    state.target = s.target;
-    state.rounding = s.rounding;
-    state.rollsPerTurn = s.rollsPerTurn;
-    state.penaltyEndsTurn = s.penaltyEndsTurn;
-    state.exactTarget = s.exactTarget;
-    state.percentSet = s.percentSet;
-    state.decreaseProb = s.decreaseProb;
-    state.players = s.players;
-    state.currentPlayer = s.currentPlayer;
-    state.turnNumber = s.turnNumber;
-    state.subRoll = s.subRoll;
+    Object.assign(state, {
+      target: snapshot.target,
+      rounding: snapshot.rounding,
+      rollsPerTurn: snapshot.rollsPerTurn,
+      penaltyEndsTurn: snapshot.penaltyEndsTurn,
+      exactTarget: snapshot.exactTarget,
+      percentSet: snapshot.percentSet,
+      decreaseProb: snapshot.decreaseProb,
+      players: snapshot.players,
+      currentPlayer: snapshot.currentPlayer,
+      turnNumber: snapshot.turnNumber,
+      subRoll: snapshot.subRoll
+    });
     undoBtn.disabled = state.history.length===0;
-    // Remove the last log row if it was added with this snapshot
     if (logBody.lastChild && logBody.children.length>0){
       logBody.removeChild(logBody.lastChild);
       if (!logBody.children.length) resetLog();
     }
     renderScores();
+    // If someone had won, re-enable controls if no longer winning
+    if (!checkWin()){
+      rollBtn.disabled = false;
+      endTurnBtn.disabled = false;
+      setStatus(false);
+    }
   }
 
   function nextPlayer(){
     state.currentPlayer = (state.currentPlayer+1)%2;
     state.subRoll = 1;
     state.turnNumber += (state.currentPlayer===0) ? 1 : 0;
-    // mark new turn start for the next player
     state.players[state.currentPlayer].turnStart = state.players[state.currentPlayer].total;
     renderScores();
   }
 
   function checkWin(){
     const p = state.players[state.currentPlayer];
-    if (state.exactTarget){
-      return p.total === state.target;
-    }
-    return p.total >= state.target;
+    return state.exactTarget ? (p.total === state.target) : (p.total >= state.target);
   }
 
   function parsePercentSet(text){
@@ -422,19 +427,17 @@
   }
 
   function rollOnce(){
-    // Disable button briefly to avoid spam
+    if (rollBtn.disabled) return;
+
+    // Visual + sound
     rollBtn.disabled = true;
     dieEl.classList.add('rolling');
     Audio.roll();
-    setTimeout(()=>{ // end of animation
-      dieEl.classList.remove('rolling');
-      rollBtn.disabled = false;
-    }, 600);
+    setTimeout(()=>{ dieEl.classList.remove('rolling'); rollBtn.disabled = false; }, 600);
 
-    // Save snapshot before mutating (for undo)
+    // Snapshot for undo & then mutate
     saveSnapshot();
 
-    // Actual roll
     const roll = randInt(1,20);
     dieEl.textContent = roll;
     lastRollEl.textContent = roll;
@@ -448,36 +451,38 @@
     let delta = 0;
 
     if (roll === 1){
-      // Reset ENTIRE score to 0; no percent applied
+      // Reset ENTIRE score to 0; end turn by default
       player.total = 0;
       after = player.total;
-      pctMag = 0; pctSign = '+';
       delta = after - before;
       note = 'Rolled 1 → total reset to 0';
       lastPctEl.textContent = 'Penalty: reset to 0';
       Audio.penaltyHard();
-      appendLogRow({turn:state.turnNumber, player:cp, sub:state.subRoll, roll, pct:0, pctSign:'+',
+      appendLogRow({turn:state.turnNumber, player:cp, sub:state.subRoll, roll, pct:undefined, pctSign:'',
                     delta, total:after, note});
-      stepAfterRoll({ penalty:true, endsTurnMaybe:true });
+      if (state.penaltyEndsTurn) { nextPlayer(); }
+      else { // still progress sub-roll if user disabled penaltyEndsTurn
+        stepAfterNormal();
+      }
       return;
     }
 
     if (roll === 11){
-      // Reset to this turn’s start; no percent applied
+      // Reset to this turn’s start; end turn by default
       player.total = player.turnStart;
       after = player.total;
-      pctMag = 0; pctSign = '+';
       delta = after - before;
       note = `Rolled 11 → reset to turn start (${fmt(player.turnStart)})`;
       lastPctEl.textContent = 'Penalty: reset to turn start';
       Audio.penaltySoft();
-      appendLogRow({turn:state.turnNumber, player:cp, sub:state.subRoll, roll, pct:0, pctSign:'+',
+      appendLogRow({turn:state.turnNumber, player:cp, sub:state.subRoll, roll, pct:undefined, pctSign:'',
                     delta, total:after, note});
-      stepAfterRoll({ penalty:true, endsTurnMaybe:true });
+      if (state.penaltyEndsTurn) { nextPlayer(); }
+      else { stepAfterNormal(); }
       return;
     }
 
-    // Normal roll: add the roll, then apply ±percent to CURRENT SCORE
+    // Normal roll: add roll, then apply ±percent to CURRENT SCORE
     let tmp = before + roll;
 
     // choose percent magnitude from set, and sign by probability
@@ -486,12 +491,7 @@
     pctSign = isDecrease ? '-' : '+';
 
     if (pctMag > 0){
-      if (isDecrease){
-        // subtract that percent FROM CURRENT SCORE
-        tmp = tmp * (1 - pctMag/100);
-      } else {
-        tmp = tmp * (1 + pctMag/100);
-      }
+      tmp = tmp * (isDecrease ? (1 - pctMag/100) : (1 + pctMag/100));
     }
     after = roundBy(tmp, state.rounding);
     player.total = after;
@@ -505,21 +505,14 @@
 
     if (checkWin()){
       setStatus(true);
-      rollBtn.disabled = true;
       Audio.win();
     } else {
       setStatus(false);
-      stepAfterRoll({ penalty:false });
+      stepAfterNormal();
     }
   }
 
-  function stepAfterRoll({ penalty, endsTurnMaybe=false }){
-    if (penalty && state.penaltyEndsTurn){
-      // pass turn immediately
-      nextPlayer();
-      return;
-    }
-    // normal sub-roll progression
+  function stepAfterNormal(){
     if (state.subRoll >= state.rollsPerTurn){
       nextPlayer();
     } else {
@@ -528,22 +521,35 @@
     }
   }
 
+  function endTurnEarly(){
+    // Allow early end any time (unless someone already won)
+    if (rollBtn.disabled && !checkWin()) return;
+
+    saveSnapshot();
+    const cp = state.currentPlayer;
+    appendLogRow({
+      turn: state.turnNumber, player: cp, sub: state.subRoll,
+      roll: '—', pct: undefined, pctSign: '', delta: 0,
+      total: state.players[cp].total, note: 'Ended turn early'
+    });
+    nextPlayer();
+  }
+
   // ---------------- Wiring ----------------
   rollBtn.addEventListener('click', rollOnce);
-  undoBtn.addEventListener('click', ()=>{
-    restoreSnapshot();
-    // Re-enable roll button unless someone already won
-    if (!checkWin()) rollBtn.disabled = false;
-  });
+  endTurnBtn.addEventListener('click', endTurnEarly);
+  undoBtn.addEventListener('click', restoreSnapshot);
   resetBtn.addEventListener('click', ()=>{
     startGame();
     rollBtn.disabled = false;
+    endTurnBtn.disabled = false;
   });
 
   // Keyboard shortcuts
   document.addEventListener('keydown', (e)=>{
     if (e.key===' '||e.key==='Enter') { e.preventDefault(); rollBtn.click(); }
     if ((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='z') { e.preventDefault(); undoBtn.click(); }
+    if (e.key.toLowerCase()==='e') { e.preventDefault(); endTurnBtn.click(); }
   });
 
   // Settings live updates
@@ -553,7 +559,7 @@
     state.rollsPerTurn = clamp(Math.floor(Number(setRPT.value||5)),1,10);
     state.percentSet = parsePercentSet(pctSetInput.value);
     state.decreaseProb = Number(decProbSel.value||0.5);
-    state.penaltyEndsTurn = !!penaltyEndsTurnCb.checked;
+    state.penaltyEndsTurn = !!penaltyEndsTurnCb.checked;  // default checked
     state.exactTarget = !!exactTargetCb.checked;
     rollsPerTurnEl.textContent = state.rollsPerTurn;
     targetEl.textContent = targetEl2.textContent = state.target;
@@ -564,7 +570,6 @@
   // Initialize
   startGame();
   applySettings();
-  // Ensure each player's turnStart is correct for the first turn
   state.players[state.currentPlayer].turnStart = 0;
   renderScores();
 })();
