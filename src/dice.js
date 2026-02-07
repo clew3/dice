@@ -6,7 +6,7 @@
 
   Dice.prototype._roll = function() {
     min = Math.ceil(1);
-    max = Math.floor(7);
+    max = Math.floor(10);
     return Math.floor(Math.random() * (max - min)) + min; //The maximum is exclusive and the minimum is inclusive
   };
 
