@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>D20 → 200 • Two-Player Percent Game</title>
+<title>D20 → 200 • Two-Player Percent Quiz Game</title>
 <style>
   :root{
     --bg:#0f172a;--panel:#0b1323;--card:#0b1220;--ink:#e5e7eb;--muted:#93adc6;
@@ -13,7 +13,7 @@
   body{margin:0;background:radial-gradient(1200px 800px at 30% -10%,#1f2937 0%,var(--bg) 40%,#090e1a 100%) fixed;
        color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
        display:grid;place-items:start center;padding:20px}
-  .app{width:100%;max-width:680px;background:linear-gradient(180deg,#0c1426,#0a1020);
+  .app{width:100%;max-width:720px;background:linear-gradient(180deg,#0c1426,#0a1020);
        border:1px solid #1f2a44;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.4);overflow:hidden}
   header{display:flex;align-items:center;gap:12px;padding:14px 16px;background:var(--panel);border-bottom:1px solid #1c2741}
   h1{margin:0;font-size:18px;font-weight:800;letter-spacing:.2px}
@@ -54,29 +54,33 @@
   .good{color:var(--accent2)} .bad{color:var(--danger)}
   /* Dice */
   .dicebox{display:flex;align-items:center;gap:10px}
-  .die{width:48px;height:48px;border-radius:12px;border:1px solid #1d2b52;background:linear-gradient(180deg,#0f1a33,#0b1430);
-       display:grid;place-items:center;color:#f8fafc;font-weight:900;font-size:20px;position:relative;
+  .die{width:56px;height:56px;border-radius:12px;border:1px solid #1d2b52;background:linear-gradient(180deg,#0f1a33,#0b1430);
+       display:grid;place-items:center;color:#f8fafc;font-weight:900;font-size:22px;position:relative;
        box-shadow:0 10px 24px rgba(0,0,0,.35)}
   .die.rolling{animation:shake .6s ease both}
   @keyframes shake{
-    0%{transform:translate(0,0) rotate(0deg)} 
-    20%{transform:translate(-2px,-2px) rotate(-10deg)} 
-    40%{transform:translate(3px,1px) rotate(8deg)} 
-    60%{transform:translate(-1px,3px) rotate(-6deg)} 
-    80%{transform:translate(2px,-2px) rotate(4deg)} 
+    0%{transform:translate(0,0) rotate(0deg)}
+    20%{transform:translate(-2px,-2px) rotate(-10deg)}
+    40%{transform:translate(3px,1px) rotate(8deg)}
+    60%{transform:translate(-1px,3px) rotate(-6deg)}
+    80%{transform:translate(2px,-2px) rotate(4deg)}
     100%{transform:translate(0,0) rotate(0deg)}
   }
   .percentTag{font-size:12px;color:var(--muted)}
   .turninfo{font-size:12px;color:var(--muted)}
   .log{background:#0a1222;border:1px solid var(--line);border-radius:12px;padding:10px;max-height:260px;overflow:auto}
+  .qa{display:grid;gap:8px;margin-top:8px}
+  .qa .row{gap:8px}
+  .qa input[type="number"]{max-width:120px}
+  .hint{font-size:12px;color:#9fb3cd}
   .sr-only{position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden}
 </style>
 </head>
 <body>
-<div class="app" role="application" aria-label="Two-Player D20 Percent Game">
+<div class="app" role="application" aria-label="Two-Player D20 Percent Quiz Game">
   <header>
     <div class="die" aria-hidden="true" style="width:28px;height:28px;font-size:14px;border-radius:8px">d20</div>
-    <h1>D20 → 200 • Two-Player Percent Game</h1>
+    <h1>D20 → 200 • Two-Player Percent Quiz Game</h1>
   </header>
 
   <main>
@@ -107,7 +111,7 @@
             <div>
               <div class="label">Last Roll</div>
               <div class="big" id="lastRoll">—</div>
-              <div class="percentTag" id="lastPct">±% on current score</div>
+              <div class="percentTag" id="lastPct">Percent to use: —</div>
             </div>
           </div>
         </div>
@@ -116,6 +120,17 @@
           <div class="big"><span id="turnNum">1</span> • <span id="subRoll">1</span>/<span id="rollsPerTurn">5</span></div>
           <div class="turninfo" id="turnInfo">Player 1’s turn</div>
         </div>
+      </div>
+
+      <!-- Quiz area -->
+      <div id="qaBox" class="qa" style="display:none;">
+        <div class="hint" id="qaPrompt">Calculate: <strong><span id="qaPct">—</span>% of <span id="qaRoll">—</span></strong></div>
+        <div class="row">
+          <input type="number" id="qaAnswer" placeholder="Your answer" step="1"/>
+          <button class="btn" id="qaSubmit">Submit</button>
+          <button class="btn secondary" id="qaIDK">I’m not sure</button>
+        </div>
+        <div class="hint">Rounding rule: <span id="roundHint">Nearest integer</span></div>
       </div>
 
       <div class="row" style="margin-top:10px;gap:8px;">
@@ -145,19 +160,13 @@
         </label>
       </div>
       <div class="grid-2" style="margin-top:8px;">
-        <label>Percent magnitudes (fixed set)
+        <label>Percent magnitudes (0–100)
           <input type="text" id="pctSet" value="0,10,20,30,40,50,60,70,80,90,100"/>
-          <span class="sub">Comma‑separated (each between 0 and 100)</span>
+          <span class="sub">Comma‑separated; each will be used as an <strong>increase</strong> % of the roll.</span>
         </label>
-        <label>Decrease probability
-          <select id="decayProb">
-            <option value="0.5">50% (default)</option>
-            <option value="0.4">40%</option>
-            <option value="0.6">60%</option>
-            <option value="0.3">30%</option>
-            <option value="0.7">70%</option>
-          </select>
-          <span class="sub">Chance that the percent is a <strong>decrease</strong>.</span>
+        <label class="row" style="align-items:center;gap:8px;">
+          <input type="checkbox" id="noNegative" checked/>
+          <span>Don’t allow negative scores (clamp at 0)</span>
         </label>
       </div>
       <div class="grid-2" style="margin-top:8px;">
@@ -171,18 +180,19 @@
         </label>
       </div>
       <div class="sub" style="margin-top:8px;">
-        Rules: After each roll, apply a random percent (from the set above) to the <strong>current score</strong>.  
-        A <strong>decrease</strong> subtracts that percent of the current score; an <strong>increase</strong> adds it.
+        Gameplay: After a normal roll, the app shows a percent <em>increase</em> of the roll.  
+        The player must compute that increase. Correct → add to score. Incorrect → subtract that amount from score.  
+        (Any decrease is <strong>based on the roll</strong>, never the current score.)
       </div>
     </details>
 
     <div class="log" aria-live="polite" aria-label="Turn log">
       <table>
         <thead>
-        <tr><th>Turn</th><th>P</th><th>Sub</th><th>Roll</th><th>%</th><th>Δ</th><th>Total</th><th>Note</th></tr>
+        <tr><th>Turn</th><th>P</th><th>Sub</th><th>Roll</th><th>%</th><th>Answer</th><th>Δ</th><th>Total</th><th>Note</th></tr>
         </thead>
         <tbody id="logBody">
-          <tr><td colspan="8" style="text-align:center;color:#8aa1bd;">No turns yet.</td></tr>
+          <tr><td colspan="9" style="text-align:center;color:#8aa1bd;">No turns yet.</td></tr>
         </tbody>
       </table>
     </div>
@@ -208,8 +218,8 @@
     return v;
   };
 
-  // ---------------- Sound (Web Audio, tiny) ----------------
-  const Audio = {
+  // ---------------- Sound (Web Audio) ----------------
+  const AudioFX = {
     ctx: null,
     ensure(){ if(!this.ctx) this.ctx = new (window.AudioContext||window.webkitAudioContext)(); },
     blip(time=0, freq=700, dur=0.08, type='sine', gain=0.12){
@@ -234,7 +244,9 @@
     },
     penaltyHard(){ this.blip(0, 200, 0.12, 'square', 0.18); this.blip(0.12, 150, 0.18, 'square', 0.18); },
     penaltySoft(){ this.blip(0, 320, 0.10, 'sawtooth', 0.12); this.blip(0.10, 260, 0.12, 'sawtooth', 0.10); },
-    win(){ this.blip(0, 660, 0.12, 'sine', 0.16); this.blip(0.12, 880, 0.14, 'sine', 0.16); this.blip(0.26, 990, 0.18, 'sine', 0.14); }
+    win(){ this.blip(0, 660, 0.12, 'sine', 0.16); this.blip(0.12, 880, 0.14, 'sine', 0.16); this.blip(0.26, 990, 0.18, 'sine', 0.14); },
+    correct(){ this.blip(0, 700, 0.10, 'sine', 0.16); this.blip(0.10, 900, 0.12, 'sine', 0.14); },
+    wrong(){ this.blip(0, 260, 0.12, 'sawtooth', 0.14); this.blip(0.12, 220, 0.14, 'square', 0.14); }
   };
 
   // ---------------- State ----------------
@@ -242,10 +254,10 @@
     target: 200,
     rounding: 'nearest',
     rollsPerTurn: 5,
-    penaltyEndsTurn: true,   // DEFAULT: penalties end the turn automatically
+    penaltyEndsTurn: true,   // penalties end turn by default
     exactTarget: false,
+    noNegative: true,
     percentSet: [0,10,20,30,40,50,60,70,80,90,100],
-    decreaseProb: 0.5, // chance that percent is a decrease
     players: [
       { name: 'Player 1', total: 0, turnStart: 0 },
       { name: 'Player 2', total: 0, turnStart: 0 }
@@ -253,7 +265,8 @@
     currentPlayer: 0,
     turnNumber: 1,
     subRoll: 1,
-    history: [] // stack of {snapshot}
+    history: [],
+    pending: null // {roll, pct, correctInc}
   };
 
   // ---------------- Elements ----------------
@@ -264,6 +277,7 @@
   const dieEl = $('die'), lastRollEl = $('lastRoll'), lastPctEl = $('lastPct');
   const turnNumEl = $('turnNum'), subRollEl = $('subRoll'), rollsPerTurnEl = $('rollsPerTurn'), turnInfo = $('turnInfo');
   const rollBtn = $('rollBtn'), endTurnBtn = $('endTurnBtn'), undoBtn = $('undoBtn'), resetBtn = $('resetBtn');
+  const qaBox = $('qaBox'), qaPrompt = $('qaPrompt'), qaPct = $('qaPct'), qaRoll = $('qaRoll'), qaAnswer = $('qaAnswer'), qaSubmit = $('qaSubmit'), qaIDK = $('qaIDK'), roundHint = $('roundHint');
   const logBody = $('logBody');
   const winBox = $('winBox'), failBox = $('failBox');
 
@@ -272,9 +286,9 @@
   const setRPT = $('setRPT');
   const roundingSel = $('rounding');
   const pctSetInput = $('pctSet');
-  const decProbSel = $('decayProb');
   const penaltyEndsTurnCb = $('penaltyEndsTurn');
   const exactTargetCb = $('exactTarget');
+  const noNegativeCb = $('noNegative');
 
   // ---------------- Rendering ----------------
   function renderScores(){
@@ -289,6 +303,12 @@
     p0.classList.toggle('active', state.currentPlayer===0);
     p1.classList.toggle('active', state.currentPlayer===1);
     turnInfo.textContent = `${state.players[state.currentPlayer].name}’s turn`;
+    roundHint.textContent = (
+      state.rounding==='nearest' ? 'Nearest integer' :
+      state.rounding==='none' ? 'Keep two decimals' :
+      state.rounding==='floor' ? 'Round down (floor)' :
+      'Round up (ceil)'
+    );
   }
 
   function clearLogIfEmpty(){
@@ -298,25 +318,18 @@
   }
 
   function appendLogRow(row){
-    // row: {turn, player, sub, roll, pct, pctSign, delta, total, note}
+    // row: {turn, player, sub, roll, pct, answer, delta, total, note}
     clearLogIfEmpty();
     const tr = document.createElement('tr');
-
-    const pctCellHtml = (typeof row.pct === 'number')
-      ? `<td class="${row.pctSign==='-'?'bad':'good'}">${row.pctSign}${row.pct}%</td>`
-      : `<td>—</td>`;
-
-    const deltaCellHtml = (typeof row.delta === 'number')
-      ? `<td class="${row.delta>=0?'good':'bad'}">${row.delta>=0?'+':''}${fmt(row.delta)}</td>`
-      : `<td>—</td>`;
-
+    const deltaClass = (typeof row.delta === 'number') ? (row.delta>=0?'good':'bad') : '';
     tr.innerHTML = `
       <td>${row.turn}</td>
       <td>${row.player+1}</td>
       <td>${row.sub ?? '—'}</td>
-      <td>${(row.roll ?? '—')}</td>
-      ${pctCellHtml}
-      ${deltaCellHtml}
+      <td>${row.roll ?? '—'}</td>
+      <td>${(typeof row.pct==='number')? row.pct+'%' : '—'}</td>
+      <td>${(row.answer!==undefined && row.answer!==null) ? row.answer : '—'}</td>
+      <td class="${deltaClass}">${(typeof row.delta==='number') ? ((row.delta>=0?'+':'') + fmt(row.delta)) : '—'}</td>
       <td>${fmt(row.total)}</td>
       <td>${row.note||''}</td>
     `;
@@ -324,7 +337,7 @@
   }
 
   function resetLog(){
-    logBody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:#8aa1bd;">No turns yet.</td></tr>`;
+    logBody.innerHTML = `<tr><td colspan="9" style="text-align:center;color:#8aa1bd;">No turns yet.</td></tr>`;
   }
 
   function setStatus(win){
@@ -349,9 +362,12 @@
     state.players[0].turnStart = 0;
     state.players[1].turnStart = 0;
     state.history = [];
+    state.pending = null;
     lastRollEl.textContent = '—';
-    lastPctEl.textContent = '±% on current score';
+    lastPctEl.textContent = 'Percent to use: —';
     dieEl.textContent = '—';
+    qaBox.style.display = 'none';
+    qaAnswer.value = '';
     setStatus(false);
     undoBtn.disabled = true;
     renderScores();
@@ -365,12 +381,13 @@
       rollsPerTurn: state.rollsPerTurn,
       penaltyEndsTurn: state.penaltyEndsTurn,
       exactTarget: state.exactTarget,
+      noNegative: state.noNegative,
       percentSet: state.percentSet,
-      decreaseProb: state.decreaseProb,
       players: state.players,
       currentPlayer: state.currentPlayer,
       turnNumber: state.turnNumber,
-      subRoll: state.subRoll
+      subRoll: state.subRoll,
+      pending: state.pending
     }));
     state.history.push({ snapshot });
     undoBtn.disabled = false;
@@ -385,20 +402,32 @@
       rollsPerTurn: snapshot.rollsPerTurn,
       penaltyEndsTurn: snapshot.penaltyEndsTurn,
       exactTarget: snapshot.exactTarget,
+      noNegative: snapshot.noNegative,
       percentSet: snapshot.percentSet,
-      decreaseProb: snapshot.decreaseProb,
       players: snapshot.players,
       currentPlayer: snapshot.currentPlayer,
       turnNumber: snapshot.turnNumber,
-      subRoll: snapshot.subRoll
+      subRoll: snapshot.subRoll,
+      pending: snapshot.pending
     });
     undoBtn.disabled = state.history.length===0;
+
+    // Remove last log row if present
     if (logBody.lastChild && logBody.children.length>0){
       logBody.removeChild(logBody.lastChild);
       if (!logBody.children.length) resetLog();
     }
+
+    // Restore QA UI
+    if (state.pending){
+      showQuestion(state.pending.roll, state.pending.pct, state.pending.correctInc);
+      // while pending, undo is disabled to avoid half-states
+      undoBtn.disabled = true;
+    } else {
+      hideQuestion();
+    }
+
     renderScores();
-    // If someone had won, re-enable controls if no longer winning
     if (!checkWin()){
       rollBtn.disabled = false;
       endTurnBtn.disabled = false;
@@ -426,16 +455,37 @@
     return (arr.length ? Array.from(new Set(arr)) : [0,10,20,30,40,50,60,70,80,90,100]);
   }
 
+  function showQuestion(roll, pct, correctInc){
+    qaBox.style.display = 'grid';
+    qaPct.textContent = pct;
+    qaRoll.textContent = roll;
+    qaAnswer.value = '';
+    qaAnswer.focus();
+    lastPctEl.textContent = `Percent to use: +${pct}% of the roll`;
+    // lock other actions while question pending
+    rollBtn.disabled = true;
+    endTurnBtn.disabled = true;
+    undoBtn.disabled = true;
+  }
+  function hideQuestion(){
+    qaBox.style.display = 'none';
+    lastPctEl.textContent = `Percent to use: —`;
+    rollBtn.disabled = false;
+    endTurnBtn.disabled = false;
+    undoBtn.disabled = (state.history.length===0);
+  }
+
   function rollOnce(){
+    if (state.pending) return; // must answer first
     if (rollBtn.disabled) return;
 
     // Visual + sound
     rollBtn.disabled = true;
     dieEl.classList.add('rolling');
-    Audio.roll();
+    AudioFX.roll();
     setTimeout(()=>{ dieEl.classList.remove('rolling'); rollBtn.disabled = false; }, 600);
 
-    // Snapshot for undo & then mutate
+    // Snapshot for undo
     saveSnapshot();
 
     const roll = randInt(1,20);
@@ -445,134 +495,37 @@
     const cp = state.currentPlayer;
     const player = state.players[cp];
     const before = player.total;
-    let after = before;
-    let pctMag = 0, pctSign = '+';
-    let note = '';
-    let delta = 0;
 
     if (roll === 1){
-      // Reset ENTIRE score to 0; end turn by default
       player.total = 0;
-      after = player.total;
-      delta = after - before;
-      note = 'Rolled 1 → total reset to 0';
-      lastPctEl.textContent = 'Penalty: reset to 0';
-      Audio.penaltyHard();
-      appendLogRow({turn:state.turnNumber, player:cp, sub:state.subRoll, roll, pct:undefined, pctSign:'',
-                    delta, total:after, note});
-      if (state.penaltyEndsTurn) { nextPlayer(); }
-      else { // still progress sub-roll if user disabled penaltyEndsTurn
-        stepAfterNormal();
-      }
-      return;
-    }
-
-    if (roll === 11){
-      // Reset to this turn’s start; end turn by default
-      player.total = player.turnStart;
-      after = player.total;
-      delta = after - before;
-      note = `Rolled 11 → reset to turn start (${fmt(player.turnStart)})`;
-      lastPctEl.textContent = 'Penalty: reset to turn start';
-      Audio.penaltySoft();
-      appendLogRow({turn:state.turnNumber, player:cp, sub:state.subRoll, roll, pct:undefined, pctSign:'',
-                    delta, total:after, note});
+      const delta = player.total - before;
+      appendLogRow({turn:state.turnNumber, player:cp, sub:state.subRoll, roll, pct:undefined, answer:undefined, delta, total:player.total, note:'Rolled 1 → total reset to 0 (turn ends)'});
+      AudioFX.penaltyHard();
       if (state.penaltyEndsTurn) { nextPlayer(); }
       else { stepAfterNormal(); }
       return;
     }
 
-    // Normal roll: add roll, then apply ±percent to CURRENT SCORE
-    let tmp = before + roll;
-
-    // choose percent magnitude from set, and sign by probability
-    pctMag = choice(state.percentSet);
-    const isDecrease = Math.random() < state.decreaseProb;
-    pctSign = isDecrease ? '-' : '+';
-
-    if (pctMag > 0){
-      tmp = tmp * (isDecrease ? (1 - pctMag/100) : (1 + pctMag/100));
+    if (roll === 11){
+      player.total = player.turnStart;
+      const delta = player.total - before;
+      appendLogRow({turn:state.turnNumber, player:cp, sub:state.subRoll, roll, pct:undefined, answer:undefined, delta, total:player.total, note:`Rolled 11 → reset to turn start (${fmt(player.turnStart)}) (turn ends)`});
+      AudioFX.penaltySoft();
+      if (state.penaltyEndsTurn) { nextPlayer(); }
+      else { stepAfterNormal(); }
+      return;
     }
-    after = roundBy(tmp, state.rounding);
-    player.total = after;
-    delta = after - before;
 
-    lastPctEl.textContent = `${pctSign}${pctMag}% applied to current score`;
-    appendLogRow({
-      turn: state.turnNumber, player: cp, sub: state.subRoll, roll,
-      pct: pctMag, pctSign, delta, total: after, note
-    });
-
-    if (checkWin()){
-      setStatus(true);
-      Audio.win();
-    } else {
-      setStatus(false);
-      stepAfterNormal();
-    }
+    // Normal roll → present question
+    const pct = choice(state.percentSet);
+    const correctInc = roundBy(roll * (pct/100), state.rounding);
+    state.pending = { roll, pct, correctInc };
+    showQuestion(roll, pct, correctInc);
   }
 
-  function stepAfterNormal(){
-    if (state.subRoll >= state.rollsPerTurn){
-      nextPlayer();
-    } else {
-      state.subRoll += 1;
-      renderScores();
-    }
-  }
+  function applyAnswer(orGiveUp=false){
+    if (!state.pending) return;
+    const { roll, pct, correctInc } = state.pending;
 
-  function endTurnEarly(){
-    // Allow early end any time (unless someone already won)
-    if (rollBtn.disabled && !checkWin()) return;
-
-    saveSnapshot();
-    const cp = state.currentPlayer;
-    appendLogRow({
-      turn: state.turnNumber, player: cp, sub: state.subRoll,
-      roll: '—', pct: undefined, pctSign: '', delta: 0,
-      total: state.players[cp].total, note: 'Ended turn early'
-    });
-    nextPlayer();
-  }
-
-  // ---------------- Wiring ----------------
-  rollBtn.addEventListener('click', rollOnce);
-  endTurnBtn.addEventListener('click', endTurnEarly);
-  undoBtn.addEventListener('click', restoreSnapshot);
-  resetBtn.addEventListener('click', ()=>{
-    startGame();
-    rollBtn.disabled = false;
-    endTurnBtn.disabled = false;
-  });
-
-  // Keyboard shortcuts
-  document.addEventListener('keydown', (e)=>{
-    if (e.key===' '||e.key==='Enter') { e.preventDefault(); rollBtn.click(); }
-    if ((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='z') { e.preventDefault(); undoBtn.click(); }
-    if (e.key.toLowerCase()==='e') { e.preventDefault(); endTurnBtn.click(); }
-  });
-
-  // Settings live updates
-  function applySettings(){
-    state.target = Math.max(1, Math.floor(Number(setTarget.value||200)));
-    state.rounding = roundingSel.value;
-    state.rollsPerTurn = clamp(Math.floor(Number(setRPT.value||5)),1,10);
-    state.percentSet = parsePercentSet(pctSetInput.value);
-    state.decreaseProb = Number(decProbSel.value||0.5);
-    state.penaltyEndsTurn = !!penaltyEndsTurnCb.checked;  // default checked
-    state.exactTarget = !!exactTargetCb.checked;
-    rollsPerTurnEl.textContent = state.rollsPerTurn;
-    targetEl.textContent = targetEl2.textContent = state.target;
-  }
-  [setTarget, roundingSel, setRPT, pctSetInput, decProbSel, penaltyEndsTurnCb, exactTargetCb]
-    .forEach(el=>el.addEventListener('change', applySettings));
-
-  // Initialize
-  startGame();
-  applySettings();
-  state.players[state.currentPlayer].turnStart = 0;
-  renderScores();
-})();
-</script>
-</body>
-</html>
+    // Read user's answer (treat "I’m not sure" as incorrect with no input)
+    let userAns = null;
