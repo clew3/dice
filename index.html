@@ -529,3 +529,134 @@
 
     // Read user's answer (treat "I’m not sure" as incorrect with no input)
     let userAns = null;
+    if (!orGiveUp){
+      const raw = qaAnswer.value.trim();
+      if (raw==='') return; // require input
+      userAns = Number(raw);
+      if (!Number.isFinite(userAns)) return;
+      // Match rounding format to comparison:
+      if (state.rounding==='none') {
+        // keep two decimals
+        userAns = Math.round(userAns * 100) / 100;
+      } else {
+        userAns = Math.round(userAns); // integer modes compare on integer
+      }
+    }
+
+    // Save snapshot so Undo reverts this check + log
+    saveSnapshot();
+
+    const cp = state.currentPlayer;
+    const player = state.players[cp];
+    const before = player.total;
+
+    const correct = (!orGiveUp && userAns === correctInc);
+    const delta = correct ? +correctInc : -correctInc;
+
+    let newTotal = before + delta;
+    if (state.noNegative && newTotal < 0) newTotal = 0;
+    player.total = newTotal;
+
+    // Log
+    appendLogRow({
+      turn: state.turnNumber,
+      player: cp,
+      sub: state.subRoll,
+      roll,
+      pct,
+      answer: (orGiveUp ? '—' : fmt(userAns)),
+      delta,
+      total: newTotal,
+      note: correct ? '✅ Correct' : `❌ Incorrect (correct was ${fmt(correctInc)})`
+    });
+
+    // Sounds
+    if (correct) AudioFX.correct(); else AudioFX.wrong();
+
+    // Clear pending + update UI
+    state.pending = null;
+    hideQuestion();
+    renderScores();
+
+    if (checkWin()){
+      setStatus(true);
+      AudioFX.win();
+    } else {
+      setStatus(false);
+      stepAfterNormal();
+    }
+  }
+
+  function stepAfterNormal(){
+    if (state.subRoll >= state.rollsPerTurn){
+      nextPlayer();
+    } else {
+      state.subRoll += 1;
+      renderScores();
+    }
+  }
+
+  function endTurnEarly(){
+    if (state.pending) return; // must answer first
+    saveSnapshot();
+    const cp = state.currentPlayer;
+    appendLogRow({
+      turn: state.turnNumber, player: cp, sub: state.subRoll,
+      roll: '—', pct: undefined, answer: undefined, delta: 0,
+      total: state.players[cp].total, note: 'Ended turn early'
+    });
+    nextPlayer();
+  }
+
+  // ---------------- Wiring ----------------
+  rollBtn.addEventListener('click', rollOnce);
+  endTurnBtn.addEventListener('click', endTurnEarly);
+  undoBtn.addEventListener('click', restoreSnapshot);
+  resetBtn.addEventListener('click', ()=>{
+    startGame();
+    rollBtn.disabled = false;
+    endTurnBtn.disabled = false;
+  });
+
+  qaSubmit.addEventListener('click', ()=>applyAnswer(false));
+  qaIDK.addEventListener('click', ()=>applyAnswer(true));
+  qaAnswer.addEventListener('keydown', (e)=>{
+    if (e.key==='Enter'){ e.preventDefault(); applyAnswer(false); }
+  });
+
+  // Keyboard shortcuts
+  document.addEventListener('keydown', (e)=>{
+    if (e.key===' '||e.key==='Enter') { 
+      // avoid double-handling when focus is in the answer field
+      if (document.activeElement===qaAnswer) return;
+      e.preventDefault(); rollBtn.click(); 
+    }
+    if ((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='z') { e.preventDefault(); undoBtn.click(); }
+    if (e.key.toLowerCase()==='e') { e.preventDefault(); endTurnBtn.click(); }
+  });
+
+  // Settings live updates
+  function applySettings(){
+    state.target = Math.max(1, Math.floor(Number(setTarget.value||200)));
+    state.rounding = roundingSel.value;
+    state.rollsPerTurn = clamp(Math.floor(Number(setRPT.value||5)),1,10);
+    state.percentSet = parsePercentSet(pctSetInput.value);
+    state.penaltyEndsTurn = !!penaltyEndsTurnCb.checked;
+    state.exactTarget = !!exactTargetCb.checked;
+    state.noNegative = !!noNegativeCb.checked;
+    rollsPerTurnEl.textContent = state.rollsPerTurn;
+    targetEl.textContent = targetEl2.textContent = state.target;
+    renderScores();
+  }
+  [setTarget, roundingSel, setRPT, pctSetInput, penaltyEndsTurnCb, exactTargetCb, noNegativeCb]
+    .forEach(el=>el.addEventListener('change', applySettings));
+
+  // Initialize
+  startGame();
+  applySettings();
+  state.players[state.currentPlayer].turnStart = 0;
+  renderScores();
+})();
+</script>
+</body>
+</html>
