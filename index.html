@@ -1,0 +1,455 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>D20 → 200 (Percent Change Game)</title>
+<style>
+  :root {
+    --bg: #0f172a;          /* slate-900 */
+    --panel: #111827;       /* gray-900 */
+    --muted: #334155;       /* slate-600 */
+    --text: #e5e7eb;        /* gray-200 */
+    --accent: #38bdf8;      /* sky-400 */
+    --accent-2: #22c55e;    /* green-500 */
+    --warn: #f97316;        /* orange-500 */
+    --danger: #ef4444;      /* red-500 */
+    --card: #0b1220;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    background: radial-gradient(1200px 800px at 30% -10%, #1f2937 0%, var(--bg) 40%, #090e1a 100%) fixed;
+    color: var(--text); display: grid; place-items: start center; padding: 20px;
+  }
+  .app {
+    width: 100%; max-width: 520px; background: linear-gradient(180deg, #0c1426, #0a1020);
+    border: 1px solid #1f2a44; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,.4);
+    overflow: hidden;
+  }
+  header {
+    display: flex; align-items: center; gap: 12px; padding: 16px 18px; background: #0b1323;
+    border-bottom: 1px solid #1c2741;
+  }
+  .die {
+    width: 28px; height: 28px; display: inline-grid; place-items: center; background: #0f1a33;
+    border: 1px solid #1d2b52; border-radius: 8px; color: var(--accent); font-weight: 700;
+  }
+  h1 {
+    font-size: 18px; margin: 0; letter-spacing: 0.2px; font-weight: 700;
+  }
+  main { padding: 18px; display: grid; gap: 16px; }
+  .hud {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+  }
+  .card {
+    background: var(--card); border: 1px solid #1a2340; border-radius: 12px; padding: 14px;
+  }
+  .label { font-size: 12px; color: #9aa4b2; margin-bottom: 6px; letter-spacing: .3px; }
+  .big {
+    font-size: 32px; font-weight: 800; color: #f1f5f9; letter-spacing: .3px;
+  }
+  .big small { font-size: 14px; color: #9aa4b2; font-weight: 600; margin-left: 6px; }
+  .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .btn {
+    background: linear-gradient(180deg, #0ea5e9, #0284c7);
+    color: white; border: none; border-radius: 12px; padding: 12px 16px; font-weight: 800;
+    cursor: pointer; box-shadow: 0 6px 20px rgba(56,189,248,0.25);
+    transition: transform .05s ease, filter .2s ease;
+  }
+  .btn:hover { filter: brightness(1.05); }
+  .btn:active { transform: translateY(1px); }
+  .btn.secondary {
+    background: #0f172a; color: #cbd5e1; border: 1px solid #233153; box-shadow: none;
+  }
+  .btn.warn { background: linear-gradient(180deg, #f97316, #ea580c); }
+  .btn.ghost {
+    background: transparent; border: 1px dashed #324061; color: #aab4c2;
+  }
+  details.settings {
+    background: #0a1222; border: 1px solid #1a2646; border-radius: 12px; padding: 10px 12px;
+  }
+  summary { cursor: pointer; font-weight: 700; color: #cbd5e1; list-style: none; }
+  summary::-webkit-details-marker { display: none; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+  label { font-size: 12px; color: #aab4c2; display: grid; gap: 6px; }
+  input[type="number"], select {
+    background: #0e162a; border: 1px solid #1d2747; color: #e5e7eb; border-radius: 10px; padding: 10px;
+  }
+  input[type="checkbox"] { transform: translateY(1px); }
+  .log {
+    background: #0a1222; border: 1px solid #1a2646; border-radius: 12px; padding: 10px;
+    max-height: 220px; overflow: auto; font-feature-settings: "tnum" 1, "lnum" 1;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  th, td { padding: 8px 6px; border-bottom: 1px solid #162144; text-align: right; }
+  th:nth-child(1), td:nth-child(1) { text-align: left; }
+  tr:last-child td { border-bottom: none; }
+  .good { color: var(--accent-2); }
+  .bad { color: var(--danger); }
+  .note { color: #93adc6; font-size: 12px; }
+  .status {
+    padding: 10px; border-radius: 10px; background: #0b1a10; border: 1px solid #143a22; color: #c6f6d5;
+  }
+  .status.fail { background: #2a0d0d; border-color: #4d1515; color: #fecaca; }
+  .sr-only { position: absolute; left: -10000px; top: auto; width: 1px; height: 1px; overflow: hidden; }
+</style>
+</head>
+<body>
+<div class="app" role="application" aria-label="D20 Percent Change Game">
+  <header>
+    <div class="die" aria-hidden="true">d20</div>
+    <h1>D20 → 200 • Percent Change Game</h1>
+  </header>
+
+  <main>
+    <div class="hud">
+      <div class="card" aria-live="polite">
+        <div class="label">Total</div>
+        <div class="big"><span id="total">0</span> <small>/ <span id="target">200</span></small></div>
+        <div class="note" id="statusNote">Roll the die to begin. Space/Enter also rolls.</div>
+      </div>
+      <div class="card">
+        <div class="label">Last Roll</div>
+        <div class="row" style="align-items: baseline; gap: 8px;">
+          <div class="big" id="lastRoll">—</div>
+          <div class="note" id="lastMod">(+/- %) after roll</div>
+        </div>
+        <div class="row" style="margin-top:10px; gap:8px;">
+          <button class="btn" id="rollBtn" aria-label="Roll D20 (r)">🎲 Roll D20</button>
+          <button class="btn secondary" id="undoBtn" aria-label="Undo last turn" disabled>Undo</button>
+          <button class="btn ghost" id="resetBtn" aria-label="Reset game">Reset</button>
+        </div>
+      </div>
+    </div>
+
+    <details class="settings">
+      <summary>⚙️ Settings</summary>
+      <div class="grid-2">
+        <label>Target Score
+          <input type="number" id="setTarget" min="1" step="1" value="200" />
+        </label>
+        <label>Start at
+          <input type="number" id="setStart" step="1" value="0" />
+        </label>
+      </div>
+      <div class="grid-2" style="margin-top:10px;">
+        <label>Apply % to
+          <select id="applyTo">
+            <option value="roll">Roll (modify the die result, then add)</option>
+            <option value="total">Total (add roll, then change total by %)</option>
+          </select>
+        </label>
+        <label>Rounding
+          <select id="rounding">
+            <option value="nearest">Nearest integer</option>
+            <option value="none">No rounding (2 decimals)</option>
+            <option value="floor">Floor</option>
+            <option value="ceil">Ceil</option>
+          </select>
+        </label>
+      </div>
+      <div class="grid-3" style="margin-top:10px;">
+        <label>Percent Mode
+          <select id="pctMode">
+            <option value="random">Random range</option>
+            <option value="fixed">Fixed value</option>
+          </select>
+        </label>
+        <label>Min % (random)
+          <input type="number" id="minPct" value="-30" step="1" />
+        </label>
+        <label>Max % (random)
+          <input type="number" id="maxPct" value="30" step="1" />
+        </label>
+      </div>
+      <div class="grid-2" style="margin-top:10px;">
+        <label>Fixed % (when ‘fixed’ is selected)
+          <input type="number" id="fixedPct" value="20" step="1" />
+        </label>
+        <label>
+          <span>Require exact target?</span>
+          <div class="row">
+            <input type="checkbox" id="exactTarget" />
+            <span class="note">If on, you must land exactly on the target.</span>
+          </div>
+        </label>
+      </div>
+    </details>
+
+    <div class="log" aria-live="polite" aria-label="Turn log">
+      <table>
+        <thead>
+          <tr>
+            <th>Turn</th>
+            <th>Roll</th>
+            <th>%</th>
+            <th>Δ</th>
+            <th>Total</th>
+          </tr>
+        </thead>
+        <tbody id="logBody">
+          <tr><td colspan="5" style="text-align:center; color:#8aa1bd;">No turns yet.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div id="winBox" class="status" style="display:none;">🎉 You reached the target! Great job.</div>
+    <div id="failBox" class="status fail" style="display:none;">Keep going—try to reach the target.</div>
+  </main>
+</div>
+
+<script>
+(() => {
+  // ---------- Utilities ----------
+  const $ = (id) => document.getElementById(id);
+  const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+  const randInt = (a, b) => Math.floor(Math.random() * (b - a + 1)) + a;
+  const fmt = (n, decimals = 2) => Number.isInteger(n) ? n.toString() : n.toFixed(decimals);
+
+  function roundByMode(value, mode) {
+    if (mode === 'none') return Math.round(value * 100) / 100;
+    if (mode === 'nearest') return Math.round(value);
+    if (mode === 'floor') return Math.floor(value);
+    if (mode === 'ceil') return Math.ceil(value);
+    return value;
+  }
+
+  // ---------- State ----------
+  const state = {
+    target: 200,
+    total: 0,
+    turn: 0,
+    history: [],
+    settings: {
+      applyTo: 'roll',     // 'roll' | 'total'
+      rounding: 'nearest', // 'nearest' | 'none' | 'floor' | 'ceil'
+      pctMode: 'random',   // 'random' | 'fixed'
+      minPct: -30,
+      maxPct: 30,
+      fixedPct: 20,
+      exactTarget: false,
+      startAt: 0,
+    }
+  };
+
+  // ---------- Elements ----------
+  const totalEl = $('total');
+  const targetEl = $('target');
+  const lastRollEl = $('lastRoll');
+  const lastModEl = $('lastMod');
+  const logBody = $('logBody');
+  const statusNote = $('statusNote');
+  const rollBtn = $('rollBtn');
+  const undoBtn = $('undoBtn');
+  const resetBtn = $('resetBtn');
+  const winBox = $('winBox');
+  const failBox = $('failBox');
+
+  // Settings inputs
+  const setTarget = $('setTarget');
+  const setStart = $('setStart');
+  const applyTo = $('applyTo');
+  const rounding = $('rounding');
+  const pctMode = $('pctMode');
+  const minPct = $('minPct');
+  const maxPct = $('maxPct');
+  const fixedPct = $('fixedPct');
+  const exactTarget = $('exactTarget');
+
+  // ---------- Initialization ----------
+  function loadFromInputs() {
+    state.target = Math.max(1, Math.floor(Number(setTarget.value || 200)));
+    state.settings.startAt = Number(setStart.value || 0);
+    state.settings.applyTo = applyTo.value;
+    state.settings.rounding = rounding.value;
+    state.settings.pctMode = pctMode.value;
+    state.settings.minPct = Number(minPct.value || -30);
+    state.settings.maxPct = Number(maxPct.value || 30);
+    if (state.settings.minPct > state.settings.maxPct) {
+      // swap if user inverted them
+      const tmp = state.settings.minPct;
+      state.settings.minPct = state.settings.maxPct;
+      state.settings.maxPct = tmp;
+      minPct.value = state.settings.minPct;
+      maxPct.value = state.settings.maxPct;
+    }
+    // limit absurd values
+    state.settings.minPct = clamp(state.settings.minPct, -100, 500);
+    state.settings.maxPct = clamp(state.settings.maxPct, -100, 500);
+    minPct.value = state.settings.minPct;
+    maxPct.value = state.settings.maxPct;
+
+    state.settings.fixedPct = clamp(Number(fixedPct.value || 20), -100, 500);
+    fixedPct.value = state.settings.fixedPct;
+
+    state.settings.exactTarget = !!exactTarget.checked;
+
+    targetEl.textContent = state.target;
+  }
+
+  function resetGame() {
+    loadFromInputs();
+    state.total = Number(state.settings.startAt) || 0;
+    state.turn = 0;
+    state.history = [];
+    totalEl.textContent = fmt(state.total);
+    lastRollEl.textContent = '—';
+    lastModEl.textContent = '(+/- %) after roll';
+    statusNote.textContent = 'Roll the die to begin. Space/Enter also rolls.';
+    undoBtn.disabled = true;
+    winBox.style.display = 'none';
+    failBox.style.display = 'none';
+    renderLog();
+  }
+
+  function renderLog() {
+    logBody.innerHTML = '';
+    if (!state.history.length) {
+      const tr = document.createElement('tr');
+      const td = document.createElement('td');
+      td.colSpan = 5;
+      td.style.textAlign = 'center';
+      td.style.color = '#8aa1bd';
+      td.textContent = 'No turns yet.';
+      tr.appendChild(td);
+      logBody.appendChild(tr);
+      return;
+    }
+    for (const h of state.history) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${h.turn}</td>
+        <td>${h.roll}</td>
+        <td class="${h.percent >= 0 ? 'good' : 'bad'}">${h.percent > 0 ? '+' : ''}${fmt(h.percent)}%</td>
+        <td class="${h.delta >= 0 ? 'good' : 'bad'}">${h.delta >= 0 ? '+' : ''}${fmt(h.delta)}</td>
+        <td>${fmt(h.totalAfter)}</td>
+      `;
+      logBody.appendChild(tr);
+    }
+  }
+
+  function computePercent() {
+    if (state.settings.pctMode === 'fixed') return state.settings.fixedPct;
+    const lo = state.settings.minPct;
+    const hi = state.settings.maxPct;
+    // Allow decimals in the future by scaling; for now integers are fine:
+    return randInt(Math.floor(lo), Math.floor(hi));
+  }
+
+  function checkWinCondition() {
+    const reached = state.total >= state.target;
+    if (state.settings.exactTarget) {
+      return state.total === state.target;
+    }
+    return reached;
+  }
+
+  function doRoll() {
+    // If already won and exactTarget is off, keep allowing rolls; UI will show win box
+    const roll = randInt(1, 20);
+    const pct = computePercent(); // can be neg or pos
+    const rmode = state.settings.rounding;
+
+    let delta = 0;
+    let newTotal = state.total;
+    if (state.settings.applyTo === 'roll') {
+      // Modify the die result by % and add to total
+      const modified = roll * (1 + pct / 100);
+      const applied = roundByMode(modified, rmode);
+      delta = applied; // total change equals the (rounded) modified roll added
+      newTotal = state.total + applied;
+    } else {
+      // Apply to total: add roll first, then apply percent change to total
+      const afterAdd = state.total + roll;
+      const changed = afterAdd * (1 + pct / 100);
+      const rounded = roundByMode(changed, rmode);
+      delta = rounded - state.total; // net change to total this turn
+      newTotal = rounded;
+    }
+
+    // Record history & update
+    state.turn += 1;
+    const record = {
+      turn: state.turn,
+      roll,
+      percent: pct,
+      delta,
+      totalAfter: newTotal
+    };
+    state.history.push(record);
+    state.total = newTotal;
+
+    // Update UI
+    totalEl.textContent = fmt(state.total);
+    lastRollEl.textContent = roll;
+    lastModEl.textContent = `${pct >= 0 ? '+' : ''}${fmt(pct)}% applied to ${state.settings.applyTo}`;
+    renderLog();
+    undoBtn.disabled = state.history.length === 0;
+
+    // Status
+    if (checkWinCondition()) {
+      winBox.style.display = 'block';
+      failBox.style.display = 'none';
+      statusNote.textContent = '🎉 You reached the target!';
+    } else {
+      winBox.style.display = 'none';
+      failBox.style.display = 'block';
+      statusNote.textContent = 'Keep rolling…';
+    }
+  }
+
+  function undo() {
+    if (!state.history.length) return;
+    state.history.pop();
+    state.turn = state.history.length;
+    state.total = state.history.length ? state.history[state.history.length - 1].totalAfter : (Number(state.settings.startAt) || 0);
+    totalEl.textContent = fmt(state.total);
+    const last = state.history[state.history.length - 1];
+    lastRollEl.textContent = last ? last.roll : '—';
+    lastModEl.textContent = last ? `${last.percent >= 0 ? '+' : ''}${fmt(last.percent)}% applied to ${state.settings.applyTo}` : '(+/- %) after roll';
+    undoBtn.disabled = state.history.length === 0;
+    renderLog();
+
+    if (checkWinCondition()) {
+      winBox.style.display = 'block';
+      failBox.style.display = 'none';
+    } else {
+      winBox.style.display = 'none';
+      failBox.style.display = state.history.length ? 'block' : 'none';
+    }
+  }
+
+  // ---------- Event wiring ----------
+  rollBtn.addEventListener('click', doRoll);
+  undoBtn.addEventListener('click', undo);
+  resetBtn.addEventListener('click', resetGame);
+
+  // Live-apply settings
+  [setTarget, setStart, applyTo, rounding, pctMode, minPct, maxPct, fixedPct, exactTarget].forEach(el => {
+    el.addEventListener('change', () => {
+      const prevStart = state.settings.startAt;
+      const prevTarget = state.target;
+      loadFromInputs();
+      // Only adjust displayed target; we keep current progress unless reset is clicked
+      targetEl.textContent = state.target;
+    });
+  });
+
+  // Keyboard shortcuts
+  document.addEventListener('keydown', (e) => {
+    if (e.key === ' ' || e.key === 'Enter' || e.key.toLowerCase() === 'r') {
+      e.preventDefault();
+      rollBtn.click();
+    } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+      undoBtn.click();
+    }
+  });
+
+  // Start
+  resetGame();
+})();
+</script>
+</body>
+</html>
